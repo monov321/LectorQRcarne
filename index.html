@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lector QR — Empresa de la Carne</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+</head>
+
+<header class="topbar">
+  <div class="brand">
+    <img src="gif.gif" class="logo" alt="logo animado">
+    <div>
+      <h1>Empresa de la void</h1>
+      <p class="tag">Lector de contextos</p>
+    </div>
+  </div>
+</header>
+
+      <p class="tag">Lector de contextos</p>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section class="card">
+      <h2>Escanear lost media</h2>
+
+      <input id="fileInput" type="file" accept="image/*" hidden />
+      <div class="dropzone" id="dropzone">Sube o arrastra el void</div>
+
+      <div class="or">o</div>
+
+      <button id="startCamera" class="btn">Usar cámara</button>
+      <button id="stopCamera" class="btn ghost" hidden>Detener</button>
+
+      <video id="video" autoplay playsinline hidden></video>
+      <canvas id="videoCanvas" hidden></canvas>
+    </section>
+
+    <section class="card">
+      <h2>Datos de la carne</h2>
+      <div id="ficha" class="ficha empty">
+        <div class="placeholder">Escanea un contexto para mostrar los datos</div>
+      </div>
+    </section>
+
+  </main>
+
+
+  <script>
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const ficha = document.getElementById("ficha");
+
+    const startCamera = document.getElementById("startCamera");
+    const stopCamera = document.getElementById("stopCamera");
+    const video = document.getElementById("video");
+    const videoCanvas = document.getElementById("videoCanvas");
+    const vctx = videoCanvas.getContext("2d");
+
+    let camStream = null;
+    let loop = null;
+
+    function showData(raw) {
+      ficha.innerHTML = "";
+      ficha.classList.remove("empty");
+
+      try {
+        const json = JSON.parse(raw);
+        ficha.innerHTML = `
+          <div class="ficha-content">
+            <p><strong>Empresa:</strong> ${json.empresa_de_la_carne || "—"}</p>
+            <p><strong>Tipo de carne:</strong> ${json.tipo_carne || "—"}</p>
+            <p><strong>Fecha de matar:</strong> ${json.fecha_matar || "—"}</p>
+            <p><strong>Entrada establecimiento:</strong> ${json.fecha_entrada_establecimiento || "—"}</p>
+            <p><strong>Fecha caducidad:</strong> ${json.fecha_caducidad || "—"}</p>
+            <p><strong>Corte:</strong> ${json.corte || "—"}</p>
+          </div>
+        `;
+      } catch {
+        ficha.innerHTML = `<pre>${raw}</pre>`;
+      }
+    }
+
+    function decode(img) {
+      const c = document.createElement("canvas");
+      const ctx = c.getContext("2d");
+      c.width = img.width;
+      c.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, img.width, img.height);
+      const qr = jsQR(d.data, img.width, img.height);
+      if (qr) showData(qr.data);
+      else alert("⚠ No se detectó QR");
+    }
+
+    dropzone.addEventListener("click", () => fileInput.click());
+
+    dropzone.addEventListener("dragover", e => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      [...e.dataTransfer.files].forEach(loadFile);
+    });
+
+    fileInput.addEventListener("change", e => {
+      [...e.target.files].forEach(loadFile);
+    });
+
+    function loadFile(file) {
+      const img = new Image();
+      img.onload = () => decode(img);
+      img.src = URL.createObjectURL(file);
+    }
+
+    async function startCam() {
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }});
+      video.srcObject = camStream;
+      video.hidden = false;
+      stopCamera.hidden = false;
+      startCamera.hidden = true;
+
+      scan();
+    }
+
+    function stopCam() {
+      cancelAnimationFrame(loop);
+      camStream.getTracks().forEach(t => t.stop());
+      video.hidden = true;
+      stopCamera.hidden = true;
+      startCamera.hidden = false;
+    }
+
+    function scan() {
+      videoCanvas.width = video.videoWidth;
+      videoCanvas.height = video.videoHeight;
+      vctx.drawImage(video, 0, 0);
+
+      const d = vctx.getImageData(0, 0, videoCanvas.width, videoCanvas.height);
+      const qr = jsQR(d.data, videoCanvas.width, videoCanvas.height);
+
+      if (qr) {
+        showData(qr.data);
+      }
+
+      loop = requestAnimationFrame(scan);
+    }
+
+    startCamera.addEventListener("click", startCam);
+    stopCamera.addEventListener("click", stopCam);
+  </script>
+
+</body>
+</html>
